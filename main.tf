@@ -4,12 +4,36 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.0"
+    }
   }
   required_version = ">= 1.0"
 }
 
 provider "azurerm" {
   features {}
+}
+
+provider "kubernetes" {
+  host                   = azurerm_kubernetes_cluster.example.kube_config.0.host
+  client_key             = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.client_key)
+  client_certificate     = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.client_certificate)
+  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.cluster_ca_certificate)
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = azurerm_kubernetes_cluster.example.kube_config.0.host
+    client_key             = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.client_key)
+    client_certificate     = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.client_certificate)
+    cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.example.kube_config.0.cluster_ca_certificate)
+  }
 }
 
 data "azurerm_resource_group" "ex000" {
@@ -35,6 +59,36 @@ resource "azurerm_kubernetes_cluster" "example" {
   tags = {
     Environment = "example"
   }
+}
+
+resource "helm_release" "airbyte" {
+  name             = "airbyte"
+  repository       = "https://airbytehq.github.io/helm-charts"
+  chart            = "airbyte"
+  namespace        = "airbyte"
+  create_namespace = true
+
+  depends_on = [azurerm_kubernetes_cluster.example]
+
+  values = [
+    yamlencode({
+      global = {
+        hostUrl = "http://airbyte.local"
+      }
+    })
+  ]
+}
+
+resource "kubernetes_manifest" "pvc" {
+  manifest = yamldecode(file("pvc.yaml"))
+
+  depends_on = [azurerm_kubernetes_cluster.example]
+}
+
+resource "kubernetes_manifest" "deployment" {
+  manifest = yamldecode(file("deployment.yaml"))
+
+  depends_on = [kubernetes_manifest.pvc]
 }
 
 output "resource_group_name" {
