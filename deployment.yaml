@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        resources:
+          requests:
+            memory: "8Gi"
+          limits:
+            memory: "8Gi"
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: my-storage
+      volumes:
+      - name: my-storage
+        persistentVolumeClaim:
+          claimName: my-pvc
